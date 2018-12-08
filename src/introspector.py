@@ -1,20 +1,20 @@
-import ast
 import importlib
+import pickle
 import pkgutil
 import sys
-from module import _get_ast, ModuleUnit
-import importUnit
+
+from src.DiscoveredModules import DiscoveredModules
+from src.module import ModuleUnit
 
 
 # path = r"/home/counterfeit/Projects/test/"
-# path = r"/home/counterfeit/Projects/Introspector/"
+# path = r"/home/counterfeit/Projects/Introspector/src/"
 
 path = r"/usr/lib/python3.6/"
 # path = r"/home/counterfeit/.IntelliJIdea2018.2/config/plugins/python/helpers/typeshed/stdlib/2and3/"
 
 debug_mode = False
-discovered_modules = dict()
-
+discovered_modules = DiscoveredModules.get_instance()
 
 # TODO: enable pickling scanning result for testing purposes
 
@@ -25,33 +25,28 @@ def remote_import(packages_string, path_string, offset, name):
     if name in sys.modules:
         del sys.modules[name]
 
+    imported_module = None
     full_name = _f(name, packages_string)
     try:
-        try:
-            imported_module = importlib.import_module(name)
-        except Exception:
+        imported_module = importlib.import_module(full_name)
+    except Exception:
+        if debug_mode:
             print("Error of absolute import")
+        try:
             imported_module = importlib.import_module('.' + name, package=packages_string)
+        except Exception as e:
+            if debug_mode:
+                print("Error of relative import   ", packages_string, ".", name, sep='')
 
-        discovered_modules[full_name] = ModuleUnit(name,
-                                                   full_name,
-                                                   _p(path_string),
-                                                   imported_module)
-        return discovered_modules[full_name]
+            with open('errors', 'a+') as f:
+                f.write(path + path_string + '\n' + packages_string + "." + name + "\n" + str(e.__class__) + "\n" + str(e) +
+                        "\n\n\n")
 
-    except Exception as e:
-        # TODO: retrieve module.py members using AST
-        print("Error of relative import   ", packages_string, ".", name, sep='')
-        discovered_modules[full_name] = ModuleUnit(name,
-                                                   full_name,
-                                                   _p(path_string),
-                                                   None)
-
-        with open('errors', 'a+') as f:
-            f.write(path + path_string + '\n' + packages_string + "." + name + "\n" + str(e.__class__) + "\n" + str(e) +
-                    "\n\n\n")
-
-        return discovered_modules[full_name]
+    discovered_modules[full_name] = ModuleUnit(name,
+                                               full_name,
+                                               _p(path_string),
+                                               imported_module)
+    return discovered_modules[full_name]
 
 
 def list_modules(packages=[], offset=0):
@@ -75,6 +70,11 @@ def list_modules(packages=[], offset=0):
 
 
 def _pop(l):
+    """Pop an element from the list if it is not empty.
+
+    This is a helper function for safe item popping from the list
+
+    """
     if l:
         l.pop()
 
@@ -82,7 +82,7 @@ def _pop(l):
 def _f(name, package_string):
     """Construct full name for the module.py
 
-    This is helper function for constructing full name of modules
+    This is a helper function for constructing full name of modules
     having file name and parent packages in form of package string.
     It has such name to make numerous calls of it a little bit more concise.
 
@@ -111,20 +111,14 @@ def main():
     # a = importlib.util._find_spec_from_path('functools', path)
     # pprint(a if a is None else inspect.getmembers(a))
 
-    x = Visitor()
-
     list_modules()
     for v in discovered_modules.values():
-        v.get_namespace()
-        x.m = v
-        x.visit(_get_ast(v))
-        with open('output/' + v.name, 'w+') as f:
-            f.write("MODULE " + v.full_name + " NAMESPACE\n\n\n")
-            for i in v.namespace:
-                f.write(str(i) + '\n')
+        v.dump_to_file()
 
-    for i in discovered_modules['base64'].imports:
-        print(i)
+    # with open('data.pickle', 'wb') as f:
+    #     pickle.dump(discovered_modules, f)
+
+    print(len(discovered_modules))
 
     # imported_module = importlib.import_module('functools')
     # a = inspect.getmembers(imported_module)

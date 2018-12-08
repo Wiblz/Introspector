@@ -1,15 +1,7 @@
-from introspector import discovered_modules
-
-
 class ImportUnit:
-    def __init__(self, alias):
+    def __init__(self, alias, module):
         self.used = False
-
-        if alias.name in discovered_modules:
-            self.module = discovered_modules[alias.name]
-        else:
-            # TODO: handle external modules dependencies
-            self.module = alias.name + " [External]"
+        self.module = module
 
         if alias.asname is not None:
             self.alias = alias.asname
