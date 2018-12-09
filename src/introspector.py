@@ -112,8 +112,15 @@ def main():
     # pprint(a if a is None else inspect.getmembers(a))
 
     list_modules()
+    print('------------------------------------------\n\n\n\n')
     for v in discovered_modules.values():
-        v.dump_to_file()
+        v.get_imports()
+
+    with open('chains', 'a+') as file:
+        for v in discovered_modules.values():
+            print(v.full_name, '   ', len(v.imports))
+            import_chain(v, file)
+            # v.dump_to_file()
 
     # with open('data.pickle', 'wb') as f:
     #     pickle.dump(discovered_modules, f)
@@ -124,6 +131,27 @@ def main():
     # a = inspect.getmembers(imported_module)
     # a = [x for x in a if x[0] != '__builtins__']
     # pprint(a)
+
+
+def import_chain(module: 'ModuleUnit', file, path=[]):
+    resolved_name = module.full_name if isinstance(module, ModuleUnit) else module
+    if resolved_name in path:
+        return
+    # print(resolved_name)
+    path.append(resolved_name)
+
+    if isinstance(module, str) or not module.imports:
+        for index in range(len(path) - 1):
+            file.write(path[index])
+            file.write(' --> ')
+        file.write(path[len(path) - 1])
+        file.write('\n\n')
+    else:
+        for imp in module.imports:
+            # if imp.module.full_name not in path:
+            import_chain(imp.module, file, path)
+
+    _pop(path)
 
 
 if __name__ == '__main__':

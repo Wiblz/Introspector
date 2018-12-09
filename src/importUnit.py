@@ -1,6 +1,6 @@
 class ImportUnit:
     def __init__(self, alias, module):
-        self.used = False
+        self.visited = False
         self.module = module
 
         if alias.asname is not None:

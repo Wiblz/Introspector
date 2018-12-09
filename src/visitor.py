@@ -48,7 +48,7 @@ class _ImportVisitor(AbstractVisitor):
                 # TODO: handle external modules dependencies
                 module = alias.name + " [External]"
 
-            self.discovered_modules[self.module.full_name].imports.add(ImportUnit(alias, module))
+            self.module.imports.add(ImportUnit(alias, module))
         AbstractVisitor.generic_visit(self, node)
 
     def visit_ImportFrom(self, node):
@@ -67,18 +67,18 @@ class _MemberVisitor(AbstractVisitor):
         # ast.NodeVisitor.generic_visit(self, node)
 
     def visit_Assign(self, node):
-        print('Found global in', self.module.full_name)
+        # print('Found global in', self.module.full_name)
 
         for t in node.targets:
             if isinstance(t, tuple):
                 for tt in t[0]:
                     self.module.namespace.append((tt.id, 'global variable'))
-                    print(tt.id)
+                    # print(tt.id)
             elif isinstance(t, _ast.Name):
                 self.module.namespace.append((t.id, 'global variable'))
-                print(t.id)
-            else:
-                print(type(t))
+                # print(t.id)
+            # else:
+                # print(type(t))
 
     def visit_AugAssign(self, node):
         print('It\'s an aug assign!')

@@ -12,9 +12,9 @@ class ModuleUnit:
         self.namespace = []
         self.module_instance = module_instance
         self.imports = set()
+        self.ast = _get_ast(self)
 
         if module_instance is None:
-            self.ast = _get_ast(self)
             self._get_namespace_manually()
         else:
             self._get_namespace()
@@ -31,6 +31,11 @@ class ModuleUnit:
 
     def _get_namespace_manually(self):
         visitor = Visitors.get_instance()
+        visitor.set_module(self)
+        visitor.visit(self.ast)
+
+    def get_imports(self):
+        visitor = Visitors.get_instance(True)
         visitor.set_module(self)
         visitor.visit(self.ast)
 
