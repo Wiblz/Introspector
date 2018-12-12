@@ -1,11 +1,13 @@
 import importlib
 import pickle
 import pkgutil
+from pprint import pprint
+
 import sys
 
 from src.DiscoveredModules import DiscoveredModules
-from src.module import ModuleUnit
-
+from src.importUnit import FromImportUnit, ModuleImportUnit
+from src.module import ModuleUnit, ExternalModule
 
 # path = r"/home/counterfeit/Projects/test/"
 # path = r"/home/counterfeit/Projects/Introspector/src/"
@@ -49,6 +51,17 @@ def remote_import(packages_string, path_string, offset, name):
     return discovered_modules[full_name]
 
 
+def discover(packages_string, path_string, offset, name):
+    full_name = _f(name, packages_string)
+    if full_name in discovered_modules:
+        return discovered_modules[full_name]
+
+    discovered_modules[full_name] = ModuleUnit(name,
+                                               full_name,
+                                               _p(path_string))
+    return discovered_modules[full_name]
+
+
 def list_modules(packages=[], offset=0):
     packages_string = '.'.join(packages)
     path_string = '/'.join(packages)
@@ -64,8 +77,8 @@ def list_modules(packages=[], offset=0):
             packages.append(i.name)
             list_modules(packages, offset + 1)
         else:
-            remote_import(packages_string, path_string, offset, i.name)
-
+            # remote_import(packages_string, path_string, offset, i.name)
+            discover(packages_string, path_string, offset, i.name)
     _pop(packages)
 
 
@@ -97,61 +110,74 @@ def _p(path_string):
 def main():
     import sys
 
-    # print(importlib.util.find_spec('copy').loader.load_module())
-    # pprint(sys.builtin_module_names)
-    # pprint(sys.modules)
-
-    # print('rlcompleter' in sys.modules)
-    # sys.meta_path = []
-    # sys.path = [path]
-
     sys.path.insert(0, path)
-
-    # a = importlib.util.find_spec('functools')
-    # a = importlib.util._find_spec_from_path('functools', path)
-    # pprint(a if a is None else inspect.getmembers(a))
 
     list_modules()
     print('------------------------------------------\n\n\n\n')
     for v in discovered_modules.values():
         v.get_imports()
 
-    with open('chains', 'a+') as file:
-        for v in discovered_modules.values():
-            print(v.full_name, '   ', len(v.imports))
-            import_chain(v, file)
-            # v.dump_to_file()
-
-    # with open('data.pickle', 'wb') as f:
-    #     pickle.dump(discovered_modules, f)
-
     print(len(discovered_modules))
 
-    # imported_module = importlib.import_module('functools')
-    # a = inspect.getmembers(imported_module)
-    # a = [x for x in a if x[0] != '__builtins__']
-    # pprint(a)
+    for v in discovered_modules.values():
+        print('MODULE', v.full_name)
+        for i in v.imports:
+            print(i)
+        print('-----------------------------\n\n')
+
+    find_redundancy()
+
+    # with open('chains', 'a+') as file:
+    #     for v in discovered_modules.values():
+    #         print(v.full_name, '   ', len(v.imports))
+    #         import_chain(v, file)
+    #         # v.dump_to_file()
 
 
-def import_chain(module: 'ModuleUnit', file, path=[]):
-    resolved_name = module.full_name if isinstance(module, ModuleUnit) else module
-    if resolved_name in path:
-        return
+# TODO: Refactor hard!
+def import_chain(module: 'ModuleUnit or ExternalModule', file, path=[]):
+    cycle = module.full_name in path
+    if not cycle:
+        path.append(module.full_name)
     # print(resolved_name)
-    path.append(resolved_name)
 
-    if isinstance(module, str) or not module.imports:
-        for index in range(len(path) - 1):
-            file.write(path[index])
-            file.write(' --> ')
-        file.write(path[len(path) - 1])
-        file.write('\n\n')
+    if isinstance(module, ExternalModule) or not module.imports:
+        _write_chain(file, path)
+    elif cycle:
+        if not discovered_modules[path[-1]].written:
+            _write_chain(file, path)
+            discovered_modules[path[-1]].written = True
     else:
         for imp in module.imports:
             # if imp.module.full_name not in path:
             import_chain(imp.module, file, path)
 
-    _pop(path)
+    if not cycle:
+        if isinstance(module, ModuleUnit) and module.written:
+            module.written = False
+        _pop(path)
+
+
+def find_redundancy():
+    with open('redundancy', 'a+') as file:
+        for v in discovered_modules.values():
+            file.write('MODULE ' + v.full_name + '\n\n')
+            fine = True
+            for imp in v.imports:
+                if (isinstance(imp, FromImportUnit) and not imp.used) or isinstance(imp, ModuleImportUnit):
+                    fine = False
+                    file.write(imp.__str__() + '\n')
+            if fine:
+                file.write('This module\'s imports are fine')
+            file.write('\n\n-------------------------------\n')
+
+
+def _write_chain(file, path):
+    for index in range(len(path) - 1):
+        file.write(path[index])
+        file.write(' --> ')
+    file.write(path[len(path) - 1])
+    file.write('\n\n')
 
 
 if __name__ == '__main__':

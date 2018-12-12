@@ -13,6 +13,7 @@ class ModuleUnit:
         self.module_instance = module_instance
         self.imports = set()
         self.ast = _get_ast(self)
+        self.written = False
 
         if module_instance is None:
             self._get_namespace_manually()
@@ -45,6 +46,16 @@ class ModuleUnit:
             if self.namespace:
                 for i in self.namespace:
                     f.write(str(i) + '\n')
+
+
+class ExternalModule:
+    def __init__(self, full_name):
+        self.full_name = full_name
+        index = full_name.rfind('.')
+        if index == -1:
+            self.name = full_name
+        else:
+            self.name = full_name[index + 1:]
 
 
 def _get_ast(module: 'ModuleUnit'):
