@@ -52,6 +52,7 @@ def resolve_relative_import(current_name, imported_name, level):
             if char == '.':
                 level -= 1
                 if level == 0: break
+
         if index == 0:
             return imported_name
         else:
@@ -65,7 +66,7 @@ class _ImportVisitor(AbstractVisitor):
 
     def add_imports(self, node, level=None):
         from src.module import ExternalModule
-        inner = len(self.namespace_stack) != 0
+        inner = len(self.namespace_stack) > 1
 
         for alias in node.names:
             if level is None:
@@ -89,7 +90,7 @@ class _ImportVisitor(AbstractVisitor):
             if alias.name == '*' and not isinstance(module, ExternalModule):
                 for item in module.namespace:
                     import_unit = FromImportUnit(alias.asname, item[0], module, node.lineno, inner)
-                    self.module.imports.add(import_unit)
+                    self.module.add_import(import_unit)
                     self.namespace_stack[-1][import_unit.get_ref()] = import_unit
             else:
                 if level is None:
@@ -97,18 +98,21 @@ class _ImportVisitor(AbstractVisitor):
                 else:
                     import_unit = FromImportUnit(alias.asname, alias.name, module, node.lineno, inner)
 
-                self.module.imports.add(import_unit)
+                self.module.add_import(import_unit)
                 self.namespace_stack[-1][import_unit.get_ref()] = import_unit
+
+    def shadow_name(self, name):
+        if name in self.namespace_stack[-1]:
+            self.namespace_stack[-1][name].shadowed = True
 
     def visit_Import(self, node):
         self.add_imports(node)
-        AbstractVisitor.generic_visit(self, node)
 
     def visit_ImportFrom(self, node):
         self.add_imports(node, node.level)
-        AbstractVisitor.generic_visit(self, node)
 
     def visit_FunctionDef(self, node):
+        self.shadow_name(node.name)
         self.namespace_stack.append(dict())
         ast.NodeVisitor.generic_visit(self, node)
         self.namespace_stack.pop()
@@ -117,22 +121,31 @@ class _ImportVisitor(AbstractVisitor):
         self.visit_FunctionDef(node)
 
     def visit_Name(self, node):
+        # something was assigned to variable that previously stored imported item
+        if node.ctx == ast.Store():
+            self.shadow_name(node.id)
+
         for namespace in reversed(self.namespace_stack):
-            if node.id in namespace and isinstance(namespace[node.id], FromImportUnit):
-                namespace[node.id].used = True
-                del namespace[node.id]
+            if node.id in namespace:
+                if not namespace[node.id].shadowed:
+                    namespace[node.id].used = True
+                    if isinstance(namespace[node.id], FromImportUnit):
+                        del namespace[node.id]
+                else:
+                    print(node.lineno, ':', node.id, 'use is shadowed')
                 break
 
     def visit_Attribute(self, node):
+        while isinstance(node.value, ast.Attribute):
+            node = node.value
+
         if isinstance(node.value, ast.Name):
             for namespace in reversed(self.namespace_stack):
                 if node.value.id in namespace and isinstance(namespace[node.value.id], ModuleImportUnit):
-                    namespace[node.value.id].names_used.append(node.attr)
-                    del namespace[node.value.id]
+                    namespace[node.value.id].resolve_name_used(node.attr)
                     break
 
-    # def generic_visit(self, node):
-    #     node_type = type(node)
+        # ast.NodeVisitor.generic_visit(self, node)
 
 
 class _MemberVisitor(AbstractVisitor):

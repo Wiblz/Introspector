@@ -11,44 +11,15 @@ from src.module import ModuleUnit, ExternalModule
 
 # path = r"/home/counterfeit/Projects/test/"
 # path = r"/home/counterfeit/Projects/Introspector/src/"
+path = r"/home/counterfeit/Projects/Introspector/"
 
-path = r"/usr/lib/python3.6/"
+# path = r"/usr/lib/python3.6/"
 # path = r"/home/counterfeit/.IntelliJIdea2018.2/config/plugins/python/helpers/typeshed/stdlib/2and3/"
 
 debug_mode = False
 discovered_modules = DiscoveredModules.get_instance()
 
 # TODO: enable pickling scanning result for testing purposes
-
-
-def remote_import(packages_string, path_string, offset, name):
-    if _f(name, packages_string) in discovered_modules:
-        return
-    if name in sys.modules:
-        del sys.modules[name]
-
-    imported_module = None
-    full_name = _f(name, packages_string)
-    try:
-        imported_module = importlib.import_module(full_name)
-    except Exception:
-        if debug_mode:
-            print("Error of absolute import")
-        try:
-            imported_module = importlib.import_module('.' + name, package=packages_string)
-        except Exception as e:
-            if debug_mode:
-                print("Error of relative import   ", packages_string, ".", name, sep='')
-
-            with open('errors', 'a+') as f:
-                f.write(path + path_string + '\n' + packages_string + "." + name + "\n" + str(e.__class__) + "\n" + str(e) +
-                        "\n\n\n")
-
-    discovered_modules[full_name] = ModuleUnit(name,
-                                               full_name,
-                                               _p(path_string),
-                                               imported_module)
-    return discovered_modules[full_name]
 
 
 def discover(packages_string, path_string, offset, name):

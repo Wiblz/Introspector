@@ -1,8 +1,6 @@
 import ast
 import inspect
 
-from src.visitor import Visitors
-
 
 class ModuleUnit:
     def __init__(self, name, full_name, path, module_instance=None):
@@ -14,28 +12,30 @@ class ModuleUnit:
         self.imports = set()
         self.ast = _get_ast(self)
         self.written = False
-
-        if module_instance is None:
-            self._get_namespace_manually()
-        else:
-            self._get_namespace()
+        self._get_namespace()
 
     def __str__(self):
-        return "[" + self.name + ",\n" + self.path + ",\n" + str(self.namespace) + ",\n" + str(self.module_instance is
-                                                                                               not None) + "]"
+        return 'module '
 
     def __repr__(self):
         return self.__str__()
 
     def _get_namespace(self):
-        self.namespace = [x for x in inspect.getmembers(self.module_instance) if not x[0].startswith('__')]
+        from src.visitor import Visitors
 
-    def _get_namespace_manually(self):
         visitor = Visitors.get_instance()
         visitor.set_module(self)
         visitor.visit(self.ast)
 
+    def add_import(self, import_unit):
+        if not import_unit.inner:
+            self.namespace.append((import_unit.get_ref(), 'imported object'))
+
+        self.imports.add(import_unit)
+
     def get_imports(self):
+        from src.visitor import Visitors
+
         visitor = Visitors.get_instance(True)
         visitor.set_module(self)
         visitor.visit(self.ast)
