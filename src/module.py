@@ -1,5 +1,9 @@
 import ast
 import inspect
+import os
+from fileinput import filename
+
+__next_number__ = -1
 
 
 class ModuleUnit:
@@ -13,6 +17,7 @@ class ModuleUnit:
         self.ast = _get_ast(self)
         self.written = False
         self._get_namespace()
+        self.number = __next_number__
 
     def __str__(self):
         return 'module '
@@ -40,8 +45,14 @@ class ModuleUnit:
         visitor.set_module(self)
         visitor.visit(self.ast)
 
+    def set_number(self, string=None):
+        global __next_number__
+        __next_number__ += 1
+        self.number = __next_number__
+
     def dump_to_file(self):
-        with open('output/' + self.full_name, 'w+') as f:
+        os.makedirs(os.path.dirname('output/namespaces/' + self.full_name), exist_ok=True)
+        with open('output/namespaces/' + self.full_name, 'w') as f:
             f.write("MODULE " + self.full_name + " NAMESPACE\n\n\n")
             if self.namespace:
                 for i in self.namespace:
@@ -50,12 +61,18 @@ class ModuleUnit:
 
 class ExternalModule:
     def __init__(self, full_name):
+        self.number = __next_number__
         self.full_name = full_name
         index = full_name.rfind('.')
         if index == -1:
             self.name = full_name
         else:
             self.name = full_name[index + 1:]
+
+    def set_number(self):
+        global __next_number__
+        __next_number__ += 1
+        self.number = __next_number__
 
 
 def _get_ast(module: 'ModuleUnit'):

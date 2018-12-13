@@ -1,4 +1,5 @@
 import importlib
+import os
 import pickle
 import pkgutil
 from pprint import pprint
@@ -9,17 +10,8 @@ from src.DiscoveredModules import DiscoveredModules
 from src.importUnit import FromImportUnit, ModuleImportUnit
 from src.module import ModuleUnit, ExternalModule
 
-# path = r"/home/counterfeit/Projects/test/"
-# path = r"/home/counterfeit/Projects/Introspector/src/"
-path = r"/home/counterfeit/Projects/Introspector/"
-
-# path = r"/usr/lib/python3.6/"
-# path = r"/home/counterfeit/.IntelliJIdea2018.2/config/plugins/python/helpers/typeshed/stdlib/2and3/"
-
 debug_mode = False
 discovered_modules = DiscoveredModules.get_instance()
-
-# TODO: enable pickling scanning result for testing purposes
 
 
 def discover(packages_string, path_string, offset, name):
@@ -60,7 +52,7 @@ def _pop(l):
 
     """
     if l:
-        l.pop()
+        return l.pop()
 
 
 def _f(name, package_string):
@@ -78,78 +70,138 @@ def _p(path_string):
     return path + path_string + '/' if path_string else path
 
 
-def main():
-    import sys
-
-    sys.path.insert(0, path)
-
-    list_modules()
-    print('------------------------------------------\n\n\n\n')
-    for v in discovered_modules.values():
-        v.get_imports()
-
-    print(len(discovered_modules))
-
-    for v in discovered_modules.values():
-        print('MODULE', v.full_name)
-        for i in v.imports:
-            print(i)
-        print('-----------------------------\n\n')
-
-    find_redundancy()
-
-    # with open('chains', 'a+') as file:
-    #     for v in discovered_modules.values():
-    #         print(v.full_name, '   ', len(v.imports))
-    #         import_chain(v, file)
-    #         # v.dump_to_file()
+def print_help():
+    print('Usage: introspector.py <path to package> [n c d r all]')
+    exit(-2)
 
 
-# TODO: Refactor hard!
-def import_chain(module: 'ModuleUnit or ExternalModule', file, path=[]):
-    cycle = module.full_name in path
-    if not cycle:
-        path.append(module.full_name)
-    # print(resolved_name)
+def get_namespaces():
+    for module in discovered_modules.values():
+        module.dump_to_file()
 
-    if isinstance(module, ExternalModule) or not module.imports:
-        _write_chain(file, path)
-    elif cycle:
-        if not discovered_modules[path[-1]].written:
-            _write_chain(file, path)
-            discovered_modules[path[-1]].written = True
-    else:
-        for imp in module.imports:
-            # if imp.module.full_name not in path:
-            import_chain(imp.module, file, path)
 
-    if not cycle:
-        if isinstance(module, ModuleUnit) and module.written:
-            module.written = False
-        _pop(path)
+def get_chains():
+    for module in discovered_modules.values():
+        os.makedirs(os.path.dirname('output/chains/' + module.full_name), exist_ok=True)
+        with open('output/chains/' + module.full_name, 'w') as file:
+            file.write("MODULE " + module.full_name + " IMPORT CHAINS\n\n\n")
+            print(module.full_name, '   ', len(module.imports))
+            import_chain(module, file)
+
+
+def get_dependencies():
+    for module in discovered_modules.values():
+        os.makedirs(os.path.dirname('output/dependencies/' + module.full_name), exist_ok=True)
+        with open('output/dependencies/' + module.full_name, 'w') as file:
+            file.write("MODULE " + module.full_name + " DEPENDENCIES\n\n\n")
+            for import_unit in module.imports:
+                if isinstance(import_unit, FromImportUnit):
+                    if import_unit.used:
+                        file.write(str(import_unit))
+                        file.write('\n')
+                else:
+                    if import_unit.used:
+                        file.write('Module ' + import_unit.module.full_name
+                                   + ' object' + ('as' + import_unit.alias if import_unit.alias else '') + ' was used.')
+                    for name in import_unit.names_used:
+                        file.write('Name ' + name + ' as module ' + import_unit.module.full_name + ' attribute was used.')
+                    file.write('\n')
 
 
 def find_redundancy():
-    with open('redundancy', 'a+') as file:
-        for v in discovered_modules.values():
-            file.write('MODULE ' + v.full_name + '\n\n')
-            fine = True
-            for imp in v.imports:
-                if (isinstance(imp, FromImportUnit) and not imp.used) or isinstance(imp, ModuleImportUnit):
-                    fine = False
-                    file.write(imp.__str__() + '\n')
-            if fine:
-                file.write('This module\'s imports are fine')
-            file.write('\n\n-------------------------------\n')
+        for module in discovered_modules.values():
+            os.makedirs(os.path.dirname('output/redundancy/' + module.full_name), exist_ok=True)
+            with open('output/redundancy/' + module.full_name, 'w') as file:
+                file.write('MODULE ' + module.full_name + '\n\n')
+                fine = True
+                for imp in module.imports:
+                    if (isinstance(imp, FromImportUnit) and not imp.used) or isinstance(imp, ModuleImportUnit):
+                        fine = False
+                        file.write(imp.__str__() + '\n')
+                if fine:
+                    file.write('This module\'s imports are fine')
 
 
-def _write_chain(file, path):
-    for index in range(len(path) - 1):
+def main(argv):
+    # 'namespaces', 'chains', 'dependencies', 'redundancy' or everything at once
+    if len(argv) < 2 or argv[1] not in ['n', 'c', 'd', 'r', 'all']:
+        print_help()
+
+    global path
+    path = argv[0]
+
+    list_modules()
+    for v in discovered_modules.values():
+        v.get_imports()
+
+    print(len(discovered_modules), 'modules found.')
+
+    if argv[1] == 'n':
+        get_namespaces()
+    elif argv[1] == 'c':
+        get_chains()
+    elif argv[1] == 'd':
+        get_dependencies()
+    elif argv[1] == 'r':
+        find_redundancy()
+    else:
+        get_namespaces()
+        get_chains()
+        get_dependencies()
+        find_redundancy()
+
+
+def import_chain(module: 'ModuleUnit or ExternalModule', file, depth=0, path=[]):
+    path.append(module.full_name)
+    if module.number != -1:
+        _write_chain(file, path, depth, module.number)
+        return
+
+    if isinstance(module, ExternalModule) or not module.imports:
+        _write_chain(file, path, depth)
+    else:
+        valid_chains = list()
+        for imp in module.imports:
+            if isinstance(imp, ModuleImportUnit) and imp.module.full_name not in path:
+                valid_chains.append(imp)
+
+        if len(valid_chains) == 0:
+            _write_chain(file, path, depth)
+
+        elif len(valid_chains) > 1:
+            module.set_number()
+            _write_chain(file, path, depth)
+            for imp in valid_chains:
+                import_chain(imp.module, file, len(path), path)
+        else:
+            module.set_number()
+            import_chain(valid_chains[0].module, file, depth, path)
+
+    _pop(path)
+
+
+def _write_chain(file, path, depth=0, number=None):
+    for index in range(depth - 1):
+        file.write((len(path[index]) + 5) * ' ')
+
+    if depth != 0:
+        file.write(len(path[depth - 1]) * ' ' + ' --> ')
+
+    for index in range(depth, len(path) - 1):
+        if path[index] in discovered_modules and discovered_modules[path[index]].number != -1:
+            file.write('[' + str(discovered_modules[path[index]].number) + '] ')
         file.write(path[index])
         file.write(' --> ')
-    file.write(path[len(path) - 1])
-    file.write('\n\n')
+
+    if path[-1] in discovered_modules and discovered_modules[path[-1]].number != -1:
+        file.write('[' + str(discovered_modules[path[-1]].number) + '] ')
+    file.write(path[-1])
+    if number is not None:
+        file.write(' (watch ' + str(number) + ')')
+    file.write('\n')
 
 
 if __name__ == '__main__':
-    main()
+    file_dir = os.path.dirname(__file__)
+    sys.path.append(file_dir)
+    main(sys.argv[1:])
