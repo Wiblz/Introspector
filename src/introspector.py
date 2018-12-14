@@ -6,6 +6,7 @@ from pprint import pprint
 
 import sys
 
+import src
 from src.DiscoveredModules import DiscoveredModules
 from src.importUnit import FromImportUnit, ModuleImportUnit
 from src.module import ModuleUnit, ExternalModule
@@ -86,13 +87,14 @@ def get_chains():
         with open('output/chains/' + module.full_name, 'w') as file:
             file.write("MODULE " + module.full_name + " IMPORT CHAINS\n\n\n")
             print(module.full_name, '   ', len(module.imports))
+            if module.full_name == 'aifc':
+                print()
             import_chain(module, file)
+        _purge_numbers()
 
 
 def get_dependencies():
     for module in discovered_modules.values():
-        if module.full_name == 'aifc':
-            print()
         os.makedirs(os.path.dirname('output/dependencies/' + module.full_name), exist_ok=True)
         with open('output/dependencies/' + module.full_name, 'w') as file:
             file.write("MODULE " + module.full_name + " DEPENDENCIES\n\n\n")
@@ -115,10 +117,6 @@ def get_dependencies():
 
 def find_redundancy():
         for module in discovered_modules.values():
-            if module.full_name == 'aifc':
-                for imp in module.imports:
-                    print(imp)
-
             os.makedirs(os.path.dirname('output/redundancy/' + module.full_name), exist_ok=True)
             with open('output/redundancy/' + module.full_name, 'w') as file:
                 file.write('MODULE ' + module.full_name + '\n\n')
@@ -155,24 +153,29 @@ def main(argv):
         find_redundancy()
     else:
         get_namespaces()
-        get_chains()
         get_dependencies()
         find_redundancy()
+        get_chains()
 
 
 def import_chain(module: 'ModuleUnit or ExternalModule', file, depth=0, path=[]):
     path.append(module.full_name)
+
     if module.number != -1:
         _write_chain(file, path, depth, module.number)
+        _pop(path)
         return
 
     if isinstance(module, ExternalModule) or not module.imports:
         _write_chain(file, path, depth)
     else:
         valid_chains = list()
+        names = list()
         for imp in module.imports:
-            if isinstance(imp, ModuleImportUnit) and imp.module.full_name not in path:
+            if isinstance(imp, ModuleImportUnit) and imp.module.full_name not in path\
+                                                 and imp.module.full_name not in names:
                 valid_chains.append(imp)
+                names.append(imp.module.full_name)
 
         if len(valid_chains) == 0:
             _write_chain(file, path, depth)
@@ -190,11 +193,15 @@ def import_chain(module: 'ModuleUnit or ExternalModule', file, depth=0, path=[])
 
 
 def _write_chain(file, path, depth=0, number=None):
-    for index in range(depth - 1):
-        file.write((len(path[index]) + 5) * ' ')
+    offset = 0
+    for index in range(depth):
+        offset += len(path[index])
+        if path[index] in discovered_modules and discovered_modules[path[index]].number != -1:
+            offset += len(str(discovered_modules[path[index]].number))
 
     if depth != 0:
-        file.write(len(path[depth - 1]) * ' ' + ' --> ')
+        offset += 5 * (depth - 1)
+        file.write(offset * ' ' + ' --> ')
 
     for index in range(depth, len(path) - 1):
         if path[index] in discovered_modules and discovered_modules[path[index]].number != -1:
@@ -208,6 +215,13 @@ def _write_chain(file, path, depth=0, number=None):
     if number is not None:
         file.write(' (watch ' + str(number) + ')')
     file.write('\n')
+
+
+def _purge_numbers():
+    for module in discovered_modules.values():
+        module.purge_number()
+
+    src.module.next_number = -1
 
 
 if __name__ == '__main__':
