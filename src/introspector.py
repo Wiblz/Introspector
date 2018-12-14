@@ -91,25 +91,34 @@ def get_chains():
 
 def get_dependencies():
     for module in discovered_modules.values():
+        if module.full_name == 'aifc':
+            print()
         os.makedirs(os.path.dirname('output/dependencies/' + module.full_name), exist_ok=True)
         with open('output/dependencies/' + module.full_name, 'w') as file:
             file.write("MODULE " + module.full_name + " DEPENDENCIES\n\n\n")
             for import_unit in module.imports:
                 if isinstance(import_unit, FromImportUnit):
                     if import_unit.used:
-                        file.write(str(import_unit))
+                        file.write('Name \'' + import_unit.item
+                                   + ('\' imported as ' + import_unit.alias if import_unit.alias else '\'') + ' from \'' +
+                                   import_unit.module.full_name + '\' module was used.')
                         file.write('\n')
                 else:
                     if import_unit.used:
-                        file.write('Module ' + import_unit.module.full_name
-                                   + ' object' + ('as' + import_unit.alias if import_unit.alias else '') + ' was used.')
+                        file.write('Module \'' + import_unit.module.full_name
+                                   + '\' object' + ('as' + import_unit.alias if import_unit.alias else '') + ' was used.')
+                        file.write('\n')
                     for name in import_unit.names_used:
-                        file.write('Name ' + name + ' as module ' + import_unit.module.full_name + ' attribute was used.')
-                    file.write('\n')
+                        file.write('Name \'' + name + '\' as module \'' + import_unit.module.full_name + '\' attribute was used.')
+                        file.write('\n')
 
 
 def find_redundancy():
         for module in discovered_modules.values():
+            if module.full_name == 'aifc':
+                for imp in module.imports:
+                    print(imp)
+
             os.makedirs(os.path.dirname('output/redundancy/' + module.full_name), exist_ok=True)
             with open('output/redundancy/' + module.full_name, 'w') as file:
                 file.write('MODULE ' + module.full_name + '\n\n')

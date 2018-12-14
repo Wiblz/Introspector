@@ -131,8 +131,6 @@ class _ImportVisitor(AbstractVisitor):
                     namespace[node.id].used = True
                     if isinstance(namespace[node.id], FromImportUnit):
                         del namespace[node.id]
-                else:
-                    print(node.lineno, ':', node.id, 'use is shadowed')
                 break
 
     def visit_Attribute(self, node):

@@ -24,8 +24,7 @@ class FromImportUnit(ImportUnit):
     def __hash__(self):
         return hash(self.module.full_name +
                     self.alias if self.alias is not None else '' +
-                    self.item +
-                    str(self.lineno))
+                    self.item)
 
     def __str__(self):
         string = 'line ' + str(self.lineno) + ': '
@@ -53,8 +52,7 @@ class ModuleImportUnit(ImportUnit):
     def __hash__(self):
         return hash(self.module.full_name +
                     self.alias if self.alias is not None else '' +
-                    str(self.names_used) +
-                    str(self.lineno))
+                    str(self.names_used))
 
     def __str__(self):
 
@@ -77,7 +75,8 @@ class ModuleImportUnit(ImportUnit):
 
     def resolve_name_used(self, name):
         if isinstance(self.module, ExternalModule):
-            self.names_used.append(name)
+            if name not in self.names_used:
+                self.names_used.append(name)
             return
 
         exists = False
@@ -86,7 +85,7 @@ class ModuleImportUnit(ImportUnit):
                 exists = True
                 break
 
-        if exists:
+        if exists and name not in self.names_used:
             self.names_used.append(name)
         else:
             self.used = True
